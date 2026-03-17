@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.db.supabase_client import (
     get_active_advocates,
+    get_advocate_by_id,
     log_notification,
     log_scrape_complete,
     log_scrape_start,
@@ -76,6 +77,74 @@ def _deduplicate_metro_sessions(
         cases=deduped,
         raw_html=metro_result.raw_html,
     )
+
+
+def run_ondemand_check(advocate_id: str) -> dict:
+    """Run an on-demand scrape for a single advocate.
+
+    Returns a dict with results per court source.
+    """
+    advocate = get_advocate_by_id(advocate_id)
+    if not advocate:
+        return {"error": "Advocate not found", "advocate_id": advocate_id}
+
+    target_date = _get_target_date()
+    adv_name = advocate["name"]
+    logger.info(f"On-demand check for {adv_name} on {target_date}")
+
+    all_results: dict[str, ScrapeResult] = {}
+
+    # TSHC
+    cis_code = _extract_cis_code(advocate)
+    if cis_code:
+        try:
+            for result in scrape_tshc_for_advocate(cis_code, target_date):
+                store_daily_result(
+                    advocate_id=advocate_id,
+                    hearing_date=target_date,
+                    court_source=result.court_source,
+                    total_cases=result.total_cases,
+                    cases_json=[c.model_dump() for c in result.cases],
+                    raw_html=result.raw_html or "",
+                )
+                all_results[result.court_source] = result
+        except Exception as e:
+            logger.error(f"TSHC on-demand error for {adv_name}: {e}")
+
+    # District courts
+    for court_key in DISTRICT_COURTS:
+        try:
+            result = scrape_district_for_advocate(
+                court_key=court_key,
+                bar_state_code=advocate["bar_state_code"],
+                bar_number=advocate["bar_number"],
+                bar_year=advocate["bar_year"],
+                target_date=target_date,
+            )
+            if court_key == "metro_sessions":
+                result = _deduplicate_metro_sessions(result, all_results.get("ccc_hyd"))
+            store_daily_result(
+                advocate_id=advocate_id,
+                hearing_date=target_date,
+                court_source=court_key,
+                total_cases=result.total_cases,
+                cases_json=[c.model_dump() for c in result.cases],
+                raw_html=result.raw_html or "",
+            )
+            all_results[court_key] = result
+        except Exception as e:
+            logger.error(f"{court_key} on-demand error for {adv_name}: {e}")
+        time.sleep(1)
+
+    total = sum(r.total_cases for r in all_results.values())
+    return {
+        "advocate_id": advocate_id,
+        "advocate_name": adv_name,
+        "target_date": target_date,
+        "total_cases": total,
+        "courts_checked": len(all_results),
+        "results": {k: v.model_dump(exclude={"raw_html"}) for k, v in all_results.items()},
+    }
 
 
 def run_daily_scrape() -> dict:

@@ -10,11 +10,18 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          dark: "#0B1F15",
-          green: "#143D28",
-          gold: "#D4AF37",
-          "gold-light": "#E8D48B",
+          navy: "#0F1B2D",
+          gold: "#C5941F",
+          "gold-light": "#D4A83A",
+          bg: "#FAFAF7",
+          charcoal: "#1A1A1A",
+          green: "#1B6B3A",
+          gray: "#6B7280",
         },
+      },
+      fontFamily: {
+        heading: ["Playfair Display", "Georgia", "serif"],
+        body: ["Source Sans 3", "system-ui", "sans-serif"],
       },
     },
   },

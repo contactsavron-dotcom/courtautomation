@@ -2,8 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  color: #333;
-  background: #ffffff;
-  font-family: Arial, Helvetica, sans-serif;
+/* Fade-in animation on scroll */
+.fade-in-section {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+}
+
+.fade-in-section.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hero geometric pattern */
+.hero-pattern {
+  background-image:
+    linear-gradient(30deg, rgba(197, 148, 31, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(197, 148, 31, 0.04) 87.5%),
+    linear-gradient(150deg, rgba(197, 148, 31, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(197, 148, 31, 0.04) 87.5%),
+    linear-gradient(30deg, rgba(197, 148, 31, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(197, 148, 31, 0.04) 87.5%),
+    linear-gradient(150deg, rgba(197, 148, 31, 0.04) 12%, transparent 12.5%, transparent 87%, rgba(197, 148, 31, 0.04) 87.5%);
+  background-size: 80px 140px;
+  background-position: 0 0, 0 0, 40px 70px, 40px 70px;
+}
+
+/* Sticky nav transition */
+.nav-scrolled {
+  background-color: rgba(15, 27, 45, 0.97);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Steps connector line */
+.steps-connector {
+  position: relative;
+}
+
+.steps-connector::after {
+  content: "";
+  position: absolute;
+  top: 28px;
+  left: calc(16.67% + 28px);
+  right: calc(16.67% + 28px);
+  height: 2px;
+  background: #C5941F;
+  opacity: 0.3;
+}
+
+@media (max-width: 768px) {
+  .steps-connector::after {
+    display: none;
+  }
+}
+
+/* FAQ accordion */
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease, padding 0.35s ease;
+}
+
+.faq-answer.open {
+  max-height: 200px;
 }

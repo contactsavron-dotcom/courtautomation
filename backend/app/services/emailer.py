@@ -20,7 +20,7 @@ COURT_DISPLAY_NAMES = {
     "medchal": "Medchal-Malkajgiri District Court",
 }
 
-FROM_ADDRESS = "CauseListPro <alerts@causelistpro.in>"
+FROM_ADDRESS = "CauseListPro <alerts@avronai.com>"
 
 
 def _build_case_table(result: ScrapeResult) -> str:

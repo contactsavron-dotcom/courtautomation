@@ -83,6 +83,14 @@ def scrape_ondemand(body: OnDemandRequest):
 
 # --- Advocate endpoints ---
 
+@app.get("/api/advocates/lookup")
+def lookup_advocate(email: str = Query(..., description="Advocate email address")):
+    advocate = get_advocate_by_email(email)
+    if not advocate:
+        return {"success": False, "message": "Not found"}
+    return {"success": True, "advocate": advocate}
+
+
 @app.post("/api/advocates/register")
 @limiter.limit("5/minute")
 def register_advocate(body: AdvocateRegister, request: Request):

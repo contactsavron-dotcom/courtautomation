@@ -40,6 +40,7 @@ interface Advocate {
   bar_council_id: string;
   tshc_computer_code: string | null;
   is_active: boolean;
+  created_at: string | null;
 }
 
 const COURT_NAMES: Record<string, string> = {
@@ -72,29 +73,18 @@ export default function DashboardPage() {
     setScrapeResult(null);
 
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-      if (!supabaseUrl || !supabaseKey) {
-        throw new Error("Supabase configuration is missing. Please contact support.");
-      }
-
       const lookupRes = await fetch(
-        `${supabaseUrl}/rest/v1/advocates?email=eq.${encodeURIComponent(email.trim())}&select=*`,
-        {
-          headers: {
-            apikey: supabaseKey || "",
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
+        `${API_URL}/api/advocates/lookup?email=${encodeURIComponent(email.trim())}`
       );
 
       if (!lookupRes.ok) throw new Error("Lookup failed");
 
-      const data: Advocate[] = await lookupRes.json();
-      if (data.length === 0) throw new Error("No advocate found with this email");
+      const data = await lookupRes.json();
+      if (!data.success) {
+        throw new Error("No advocate found with this email. Please register first.");
+      }
 
-      setAdvocate(data[0]);
+      setAdvocate(data.advocate);
     } catch (err: unknown) {
       setLookupError(err instanceof Error ? err.message : "Lookup failed");
     } finally {
@@ -184,7 +174,7 @@ export default function DashboardPage() {
                   Switch Account
                 </button>
               </div>
-              <div className="grid md:grid-cols-3 gap-4 text-sm">
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">Bar Council ID</span>
                   <p className="font-mono font-semibold">{advocate.bar_council_id}</p>
@@ -196,6 +186,10 @@ export default function DashboardPage() {
                 <div>
                   <span className="text-gray-500">Courts Monitored</span>
                   <p className="font-semibold">{advocate.tshc_computer_code ? "5 (incl. TSHC)" : "4 (District only)"}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Registered</span>
+                  <p className="font-semibold">{advocate.created_at ? new Date(advocate.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "-"}</p>
                 </div>
               </div>
             </div>
@@ -213,7 +207,7 @@ export default function DashboardPage() {
                 <div className="mt-4">
                   <div className="inline-block w-8 h-8 border-4 border-brand-gold border-t-transparent rounded-full animate-spin" />
                   <p className="text-gray-500 text-sm mt-2">
-                    Scanning courts for your cases. This may take 30-60 seconds...
+                    Checking 5 courts... this takes 30-60 seconds
                   </p>
                 </div>
               )}

@@ -52,7 +52,7 @@ def _fetch_scid(session: requests.Session, domain: str) -> str:
     """GET the cause list page and extract the hidden scid value."""
     url = f"https://{domain}{CAUSE_LIST_PATH}"
     logger.info(f"Fetching scid from {url}")
-    resp = session.get(url, timeout=30)
+    resp = session.get(url, timeout=30, verify=True)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "lxml")
     scid_input = soup.find("input", {"name": "scid"})
@@ -67,7 +67,7 @@ def _fetch_and_solve_captcha(session: requests.Session, domain: str, scid: str) 
     """Download the captcha image and solve it via 2Captcha."""
     captcha_url = f"https://{domain}/?_siwp_captcha&id={scid}"
     logger.info(f"Downloading captcha from {domain}")
-    resp = session.get(captcha_url, timeout=30)
+    resp = session.get(captcha_url, timeout=30, verify=True)
     resp.raise_for_status()
     image_bytes = resp.content
     logger.info(f"Captcha image: {len(image_bytes)} bytes")
@@ -174,7 +174,7 @@ def scrape_district_for_advocate(
         }
 
         try:
-            resp = session.post(ajax_url, data=form_data, timeout=30)
+            resp = session.post(ajax_url, data=form_data, timeout=30, verify=True)
             resp.raise_for_status()
         except requests.RequestException as e:
             logger.error(f"AJAX POST failed for {court_key}: {e}")

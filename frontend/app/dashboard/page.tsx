@@ -75,6 +75,10 @@ export default function DashboardPage() {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error("Supabase configuration is missing. Please contact support.");
+      }
+
       const lookupRes = await fetch(
         `${supabaseUrl}/rest/v1/advocates?email=eq.${encodeURIComponent(email.trim())}&select=*`,
         {
@@ -253,7 +257,7 @@ export default function DashboardPage() {
                       </thead>
                       <tbody>
                         {court.cases.map((c, i) => (
-                          <tr key={i} className="border-t border-gray-100">
+                          <tr key={`${key}-${c.case_no}-${i}`} className="border-t border-gray-100">
                             <td className="px-4 py-2 text-gray-500">{c.serial_no || "-"}</td>
                             <td className="px-4 py-2 font-medium">{c.case_no}</td>
                             <td className="px-4 py-2 text-gray-700">{c.parties_petitioner || "-"}</td>

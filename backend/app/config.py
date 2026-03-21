@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: str
     RESEND_API_KEY: str
-    CAPSOLVER_API_KEY: str = "PLACEHOLDER"
+    TWOCAPTCHA_API_KEY: str = "PLACEHOLDER"
     DAILY_SCRAPE_SECRET: str
     APP_URL: str = "http://localhost:3000"
     ADMIN_EMAIL: str

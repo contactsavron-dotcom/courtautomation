@@ -64,7 +64,7 @@ def _fetch_scid(session: requests.Session, domain: str) -> str:
 
 
 def _fetch_and_solve_captcha(session: requests.Session, domain: str, scid: str) -> str:
-    """Download the captcha image and solve it via CapSolver."""
+    """Download the captcha image and solve it via 2Captcha."""
     captcha_url = f"https://{domain}/?_siwp_captcha&id={scid}"
     logger.info(f"Downloading captcha from {domain}")
     resp = session.get(captcha_url, timeout=30, verify=True)

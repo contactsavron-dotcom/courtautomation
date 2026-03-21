@@ -101,28 +101,28 @@ const TESTIMONIALS = [
 const PLANS = [
   {
     name: "Free Trial",
-    price: "\u20B90",
-    period: "/month",
-    sub: "30 days, all features",
-    features: ["All courts covered", "Daily email alerts", "Dashboard access", "No credit card required"],
+    price: "Free",
+    sub: "30 days, no credit card required",
+    features: ["All features included", "All courts covered", "Daily email alerts", "Dashboard access"],
     cta: "Start Free Trial",
+    href: "/register",
   },
   {
-    name: "Solo",
-    price: "\u20B9199",
-    period: "/month",
-    sub: "1 advocate",
-    features: ["All courts covered", "Daily email alerts", "Dashboard access", "Email support"],
-    cta: "Choose Solo",
+    name: "Individual Advocate",
+    price: null,
+    sub: "For solo practitioners",
+    features: ["All courts covered", "Daily email alerts", "Dashboard access", "Advance notifications"],
+    cta: "Contact for Pricing",
+    href: "mailto:contactsavron@gmail.com?subject=CauseListPro%20Pricing%20Inquiry",
     highlight: true,
   },
   {
-    name: "Professional",
-    price: "\u20B9399",
-    period: "/month",
-    sub: "1 advocate",
-    features: ["All courts covered", "Daily email alerts", "Dashboard access", "Priority support", "Advance alerts", "Case history"],
-    cta: "Choose Professional",
+    name: "Law Firm",
+    price: null,
+    sub: "For teams of 2\u201310 advocates",
+    features: ["Everything in Individual", "Firm dashboard", "Multiple advocates", "Priority support"],
+    cta: "Contact for Pricing",
+    href: "mailto:contactsavron@gmail.com?subject=CauseListPro%20Pricing%20Inquiry",
   },
 ];
 
@@ -363,7 +363,7 @@ export default function Home() {
               Simple, Transparent Pricing
             </h2>
             <p className="text-brand-gray text-center mb-14 text-lg">
-              Start free. Upgrade when you&rsquo;re ready.
+              Start with a 30-day free trial. No credit card required.
             </p>
             <div className="grid md:grid-cols-3 gap-8">
               {PLANS.map((p) => (
@@ -385,8 +385,11 @@ export default function Home() {
                   </h3>
                   <p className="text-brand-gray text-sm mb-4">{p.sub}</p>
                   <div className="mb-6">
-                    <span className="text-4xl font-bold text-brand-charcoal">{p.price}</span>
-                    <span className="text-brand-gray text-sm">{p.period}</span>
+                    {p.price ? (
+                      <span className="text-4xl font-bold text-brand-charcoal">{p.price}</span>
+                    ) : (
+                      <span className="text-2xl font-bold text-brand-charcoal">Custom Pricing</span>
+                    )}
                   </div>
                   <ul className="text-left text-sm text-brand-gray space-y-3 mb-8">
                     {p.features.map((f) => (
@@ -398,8 +401,8 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
-                  <Link
-                    href="/register"
+                  <a
+                    href={p.href}
                     className={`block w-full py-3 rounded-lg font-semibold transition-colors ${
                       p.highlight
                         ? "bg-brand-gold text-brand-navy hover:bg-brand-gold-light"
@@ -407,9 +410,24 @@ export default function Home() {
                     }`}
                   >
                     {p.cta}
-                  </Link>
+                  </a>
                 </div>
               ))}
+            </div>
+            <div className="text-center mt-12 text-brand-gray">
+              <p className="font-medium text-brand-charcoal mb-2">For pricing inquiries, contact us:</p>
+              <p>
+                Email:{" "}
+                <a href="mailto:contactsavron@gmail.com" className="text-brand-gold hover:underline">
+                  contactsavron@gmail.com
+                </a>
+              </p>
+              <p>
+                Phone:{" "}
+                <a href="tel:+917842520606" className="text-brand-gold hover:underline">
+                  +91 7842520606
+                </a>
+              </p>
             </div>
           </div>
         </FadeIn>
@@ -495,12 +513,20 @@ export default function Home() {
           </div>
           <div className="border-t border-white/10 mt-8 pt-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-sm text-gray-500">
             <p>&copy; 2026 CauseListPro. All rights reserved.</p>
-            <p>
-              Contact:{" "}
-              <a href="mailto:contactsavron@gmail.com" className="text-gray-400 hover:text-white transition-colors">
-                contactsavron@gmail.com
-              </a>
-            </p>
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+              <p>
+                Email:{" "}
+                <a href="mailto:contactsavron@gmail.com" className="text-gray-400 hover:text-white transition-colors">
+                  contactsavron@gmail.com
+                </a>
+              </p>
+              <p>
+                Phone:{" "}
+                <a href="tel:+917842520606" className="text-gray-400 hover:text-white transition-colors">
+                  +91 7842520606
+                </a>
+              </p>
+            </div>
           </div>
           <p className="text-gray-600 text-xs mt-4">
             Source: tshc.gov.in, eCourts India. CauseListPro is not affiliated with any court.

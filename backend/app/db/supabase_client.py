@@ -86,6 +86,20 @@ def log_notification(
     return res.data[0]
 
 
+def was_notification_sent_today(advocate_id: str, hearing_date: str) -> bool:
+    """Check if an email was already successfully sent to this advocate for this date."""
+    result = (
+        supabase.table("notification_logs")
+        .select("id")
+        .eq("advocate_id", advocate_id)
+        .eq("hearing_date", hearing_date)
+        .eq("channel", "email")
+        .eq("status", "sent")
+        .execute()
+    )
+    return len(result.data) > 0
+
+
 def log_scrape_start(run_id: str, court_source: str) -> str:
     row = {
         "run_id": run_id,

@@ -10,6 +10,7 @@ from app.db.supabase_client import (
     log_scrape_complete,
     log_scrape_start,
     store_daily_result,
+    was_notification_sent_today,
 )
 from app.models.schemas import ScrapeResult
 from app.scrapers.district import DISTRICT_COURTS, scrape_district_for_advocate
@@ -253,31 +254,36 @@ def run_daily_scrape() -> dict:
         advocate_total = sum(r.total_cases for r in all_results.values())
         total_cases += advocate_total
 
-        should_notify = advocate_total > 0 or advocate.get("notify_zero_cases", False)
-        if should_notify:
-            subject = (
-                f"CauseListPro: {advocate_total} case(s) on {target_date}"
-                if advocate_total > 0
-                else f"CauseListPro: No cases on {target_date}"
-            )
-            try:
-                sent = send_daily_alert(
-                    advocate_name=adv_name,
-                    advocate_email=adv_email,
-                    hearing_date=target_date,
-                    results_by_court=all_results,
-                    total_cases=advocate_total,
+        # Check if email was already sent for this advocate + date
+        already_sent = was_notification_sent_today(adv_id, target_date)
+        if already_sent:
+            logger.info(f"Email already sent to {adv_name} for {target_date} — skipping")
+        else:
+            should_notify = advocate_total > 0 or advocate.get("notify_zero_cases", False)
+            if should_notify:
+                subject = (
+                    f"CauseListPro: {advocate_total} case(s) on {target_date}"
+                    if advocate_total > 0
+                    else f"CauseListPro: No cases on {target_date}"
                 )
-                if sent:
-                    emails_sent += 1
-                    log_notification(adv_id, target_date, "email", "sent", subject)
-                else:
-                    log_notification(adv_id, target_date, "email", "failed", subject, "send returned false")
-            except Exception as e:
-                msg = f"Email error for {adv_name}: {e}"
-                logger.error(msg)
-                errors.append(msg)
-                log_notification(adv_id, target_date, "email", "failed", subject, str(e))
+                try:
+                    sent = send_daily_alert(
+                        advocate_name=adv_name,
+                        advocate_email=adv_email,
+                        hearing_date=target_date,
+                        results_by_court=all_results,
+                        total_cases=advocate_total,
+                    )
+                    if sent:
+                        emails_sent += 1
+                        log_notification(adv_id, target_date, "email", "sent", subject)
+                    else:
+                        log_notification(adv_id, target_date, "email", "failed", subject, "send returned false")
+                except Exception as e:
+                    msg = f"Email error for {adv_name}: {e}"
+                    logger.error(msg)
+                    errors.append(msg)
+                    log_notification(adv_id, target_date, "email", "failed", subject, str(e))
 
     # --- Finalize ---
     status = "completed" if not errors else "completed_with_errors"

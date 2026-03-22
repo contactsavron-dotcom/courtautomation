@@ -54,42 +54,90 @@ def _post_with_retry(url: str, data: dict) -> requests.Response | None:
 
 
 def parse_tshc_html(html: str) -> list[CaseEntry]:
-    """Parse TSHC cause list HTML into CaseEntry objects."""
+    """Parse TSHC cause list HTML into CaseEntry objects.
+
+    The page contains multiple <table> elements, each preceded by a
+    'COURT NO. X' header.  Inside each table, single-column rows are
+    section headers (e.g. 'INTERLOCUTORY') and 6-column rows are case data.
+    """
     soup = BeautifulSoup(html, "lxml")
-    cases = []
+    cases: list[CaseEntry] = []
 
-    tbody = soup.find("tbody")
-    if not tbody:
-        return cases
+    # Extract court number from anywhere in the page
+    court_no: str | None = None
+    court_match = re.search(r"COURT NO\.?\s*(\d+)", html, re.I)
+    if court_match:
+        court_no = court_match.group(1)
 
-    for row in tbody.find_all("tr"):
-        tds = row.find_all("td")
-        if len(tds) < 5:
+    # Only process the main cause list table (id="dataTable")
+    table = soup.find("table", id="dataTable")
+    if table:
+        tables = [table]
+    else:
+        # Fallback: use first table with class 'table-bordered'
+        tables = soup.find_all("table", class_="table-bordered")
+
+    for table in tables:
+        tbody = table.find("tbody")
+        if not tbody:
             continue
 
-        cells = [td.get_text(strip=True, separator="\n") for td in tds]
+        status_section = ""  # Track section headers like "INTERLOCUTORY"
 
-        # Column 2 (parties) has petitioner vs respondent separated by "vs"
-        parties_raw = cells[2] if len(cells) > 2 else ""
-        parts = re.split(r"\n*vs\n*", parties_raw, maxsplit=1)
-        petitioner = parts[0].strip() if len(parts) > 0 else ""
-        respondent = parts[1].strip() if len(parts) > 1 else ""
+        for row in tbody.find_all("tr"):
+            tds = row.find_all("td")
 
-        # Column 5 (district/remarks) — first line is district
-        district_raw = cells[5] if len(cells) > 5 else ""
-        district = district_raw.split("\n")[0].strip() if district_raw else None
+            # Single-column row = section header (status context)
+            if len(tds) == 1:
+                header_text = tds[0].get_text(strip=True)
+                # Skip non-status headers like "Connected Case Number"
+                if header_text and header_text not in (
+                    "Connected Case Number", "PETITIONER(S)", "RESPONDENT(S)", "",
+                ):
+                    status_section = header_text
+                continue
 
-        cases.append(
-            CaseEntry(
-                serial_no=cells[0].strip() or None,
-                case_no=cells[1].strip(),
-                parties_petitioner=petitioner,
-                parties_respondent=respondent,
-                petitioner_advocate=cells[3].strip() if len(cells) > 3 else "",
-                respondent_advocate=cells[4].strip() if len(cells) > 4 else "",
-                district=district,
+            if len(tds) < 5:
+                continue
+
+            cells = [td.get_text(strip=True, separator="\n") for td in tds]
+
+            # Column 2: parties — petitioner vs respondent
+            parties_raw = cells[2] if len(cells) > 2 else ""
+            parts = re.split(r"\n*vs\n*", parties_raw, maxsplit=1)
+            petitioner = parts[0].strip() if len(parts) > 0 else ""
+            respondent = parts[1].strip() if len(parts) > 1 else ""
+
+            # Column 5: district + remarks
+            district_raw = cells[5] if len(cells) > 5 else ""
+            district_lines = [
+                l.strip() for l in district_raw.split("\n") if l.strip()
+            ]
+            district = district_lines[0] if district_lines else None
+            remarks = district_lines[1] if len(district_lines) > 1 else ""
+
+            # Derive status from remarks or section header
+            status = ""
+            for keyword in ("FOR ORDERS", "FOR ADMISSION", "FOR ARGUMENTS", "FOR HEARING"):
+                if keyword in remarks.upper() or keyword in status_section.upper():
+                    status = keyword
+                    break
+            if not status and status_section:
+                status = status_section
+
+            cases.append(
+                CaseEntry(
+                    serial_no=cells[0].strip() or None,
+                    case_no=cells[1].strip(),
+                    parties_petitioner=petitioner,
+                    parties_respondent=respondent,
+                    petitioner_advocate=cells[3].strip() if len(cells) > 3 else "",
+                    respondent_advocate=cells[4].strip() if len(cells) > 4 else "",
+                    court_name=court_no,
+                    district=district,
+                    status=status,
+                )
             )
-        )
 
     return cases
 

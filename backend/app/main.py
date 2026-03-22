@@ -54,6 +54,9 @@ async def log_requests(request: Request, call_next):
 
 # --- Auth endpoints ---
 
+ALL_COURTS = ["tshc", "rangareddy", "ccc_hyd", "metro_sessions", "medchal"]
+
+
 class AuthRegisterRequest(BaseModel):
     name: str
     email: str
@@ -61,6 +64,7 @@ class AuthRegisterRequest(BaseModel):
     phone: Optional[str] = None
     bar_council_id: str
     tshc_computer_code: Optional[str] = None
+    courts_selected: Optional[list[str]] = None
 
 
 class AuthLoginRequest(BaseModel):
@@ -115,6 +119,7 @@ def auth_register(body: AuthRegisterRequest, request: Request):
         "bar_number": bar_number,
         "bar_year": bar_year,
         "tshc_computer_code": body.tshc_computer_code.strip() if body.tshc_computer_code else None,
+        "courts_selected": body.courts_selected if body.courts_selected else ALL_COURTS,
     }
 
     try:
@@ -244,6 +249,7 @@ def register_advocate(body: AdvocateRegister, request: Request):
         "bar_number": bar_number,
         "bar_year": bar_year,
         "tshc_computer_code": body.tshc_computer_code,
+        "courts_selected": ALL_COURTS,
     }
 
     try:

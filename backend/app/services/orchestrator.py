@@ -94,35 +94,39 @@ def run_ondemand_check(advocate_id: str) -> dict:
     logger.info(f"On-demand check for {adv_name} on {target_date}")
 
     all_results: dict[str, ScrapeResult] = {}
+    selected = advocate.get("courts_selected") or list(DISTRICT_COURTS.keys()) + ["tshc"]
 
     # TSHC
-    cis_code = _extract_cis_code(advocate)
-    tshc_results: list[ScrapeResult] = []
-    if cis_code:
-        try:
-            tshc_results = scrape_tshc_for_advocate(cis_code, target_date)
-        except Exception as e:
-            logger.error(f"TSHC on-demand error for {adv_name}: {e}")
-    elif advocate.get("name"):
-        logger.info(f"No CIS code for {adv_name} — using name search fallback")
-        try:
-            tshc_results = scrape_tshc_by_name(advocate["name"], target_date)
-        except Exception as e:
-            logger.error(f"TSHC name-search error for {adv_name}: {e}")
+    if "tshc" in selected:
+        cis_code = _extract_cis_code(advocate)
+        tshc_results: list[ScrapeResult] = []
+        if cis_code:
+            try:
+                tshc_results = scrape_tshc_for_advocate(cis_code, target_date)
+            except Exception as e:
+                logger.error(f"TSHC on-demand error for {adv_name}: {e}")
+        elif advocate.get("name"):
+            logger.info(f"No CIS code for {adv_name} — using name search fallback")
+            try:
+                tshc_results = scrape_tshc_by_name(advocate["name"], target_date)
+            except Exception as e:
+                logger.error(f"TSHC name-search error for {adv_name}: {e}")
 
-    for result in tshc_results:
-        store_daily_result(
-            advocate_id=advocate_id,
-            hearing_date=target_date,
-            court_source=result.court_source,
-            total_cases=result.total_cases,
-            cases_json=[c.model_dump() for c in result.cases],
-            raw_html=result.raw_html or "",
-        )
-        all_results[result.court_source] = result
+        for result in tshc_results:
+            store_daily_result(
+                advocate_id=advocate_id,
+                hearing_date=target_date,
+                court_source=result.court_source,
+                total_cases=result.total_cases,
+                cases_json=[c.model_dump() for c in result.cases],
+                raw_html=result.raw_html or "",
+            )
+            all_results[result.court_source] = result
 
     # District courts
     for court_key in DISTRICT_COURTS:
+        if court_key not in selected:
+            continue
         try:
             result = scrape_district_for_advocate(
                 court_key=court_key,
@@ -185,39 +189,43 @@ def run_daily_scrape() -> dict:
         logger.info(f"Processing advocate {advocates_checked}/{len(advocates)}: {adv_name}")
 
         all_results: dict[str, ScrapeResult] = {}
+        selected = advocate.get("courts_selected") or list(DISTRICT_COURTS.keys()) + ["tshc"]
 
         # --- TSHC High Court (3 list types) ---
-        cis_code = _extract_cis_code(advocate)
-        tshc_results: list[ScrapeResult] = []
-        if cis_code:
-            try:
-                tshc_results = scrape_tshc_for_advocate(cis_code, target_date)
-            except Exception as e:
-                msg = f"TSHC error for {adv_name}: {e}"
-                logger.error(msg)
-                errors.append(msg)
-        elif advocate.get("name"):
-            logger.info(f"No CIS code for {adv_name} — using name search fallback")
-            try:
-                tshc_results = scrape_tshc_by_name(advocate["name"], target_date)
-            except Exception as e:
-                msg = f"TSHC name-search error for {adv_name}: {e}"
-                logger.error(msg)
-                errors.append(msg)
+        if "tshc" in selected:
+            cis_code = _extract_cis_code(advocate)
+            tshc_results: list[ScrapeResult] = []
+            if cis_code:
+                try:
+                    tshc_results = scrape_tshc_for_advocate(cis_code, target_date)
+                except Exception as e:
+                    msg = f"TSHC error for {adv_name}: {e}"
+                    logger.error(msg)
+                    errors.append(msg)
+            elif advocate.get("name"):
+                logger.info(f"No CIS code for {adv_name} — using name search fallback")
+                try:
+                    tshc_results = scrape_tshc_by_name(advocate["name"], target_date)
+                except Exception as e:
+                    msg = f"TSHC name-search error for {adv_name}: {e}"
+                    logger.error(msg)
+                    errors.append(msg)
 
-        for result in tshc_results:
-            store_daily_result(
-                advocate_id=adv_id,
-                hearing_date=target_date,
-                court_source=result.court_source,
-                total_cases=result.total_cases,
-                cases_json=[c.model_dump() for c in result.cases],
-                raw_html=result.raw_html or "",
-            )
-            all_results[result.court_source] = result
+            for result in tshc_results:
+                store_daily_result(
+                    advocate_id=adv_id,
+                    hearing_date=target_date,
+                    court_source=result.court_source,
+                    total_cases=result.total_cases,
+                    cases_json=[c.model_dump() for c in result.cases],
+                    raw_html=result.raw_html or "",
+                )
+                all_results[result.court_source] = result
 
         # --- District Courts (4 courts) ---
         for court_key in DISTRICT_COURTS:
+            if court_key not in selected:
+                continue
             try:
                 result = scrape_district_for_advocate(
                     court_key=court_key,

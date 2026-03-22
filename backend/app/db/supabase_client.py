@@ -96,6 +96,19 @@ def log_scrape_start(run_id: str, court_source: str) -> str:
     return res.data[0]["id"]
 
 
+def create_advocate_with_auth(auth_user_id: str, data: dict) -> dict | None:
+    result = supabase.table("advocates").insert({
+        **data,
+        "auth_user_id": auth_user_id,
+    }).execute()
+    return result.data[0] if result.data else None
+
+
+def get_advocate_by_auth_id(auth_user_id: str) -> dict | None:
+    res = supabase.table("advocates").select("*").eq("auth_user_id", auth_user_id).execute()
+    return res.data[0] if res.data else None
+
+
 def log_scrape_complete(
     log_id: str,
     status: str,

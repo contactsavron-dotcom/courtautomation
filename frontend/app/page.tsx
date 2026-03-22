@@ -213,7 +213,7 @@ export default function Home() {
           </Link>
           <div className="flex gap-3 items-center">
             <Link
-              href="/dashboard"
+              href="/login"
               className="text-gray-300 hover:text-white text-sm font-medium transition-colors"
             >
               Login

@@ -24,6 +24,12 @@ ENDPOINTS = [
     ("tshc_supplementary", f"{BASE_URL}/suplementary-list/advocateCodeWiseView"),
 ]
 
+NAME_ENDPOINTS = [
+    ("tshc_daily", f"{BASE_URL}/advocateWiseView"),
+    ("tshc_advance", f"{BASE_URL}/advance-list/advocateWiseView"),
+    ("tshc_supplementary", f"{BASE_URL}/suplementary-list/advocateWiseView"),
+]
+
 MAX_RETRIES = 3
 BACKOFF_SECONDS = [2, 4, 8]
 
@@ -196,6 +202,60 @@ def scrape_tshc_for_advocate(cis_code: str, target_date: str) -> list[ScrapeResu
                 )
             )
             logger.info(f"{court_source}: found {total} cases for code={cis_code}")
+
+        time.sleep(1)
+
+    return results
+
+
+def scrape_tshc_by_name(advocate_name: str, target_date: str) -> list[ScrapeResult]:
+    """Fallback for advocates without a CIS code.
+
+    Uses POST /advocateWiseView with advocate name instead of code.
+    Checks all 3 list types (daily, advance, supplementary).
+
+    Args:
+        advocate_name: Advocate name (will be uppercased).
+        target_date: Date in YYYY-MM-DD format.
+
+    Returns:
+        List of ScrapeResult for lists with cases found.
+    """
+    name = advocate_name.strip().upper()
+    if len(name) < 3:
+        return []
+
+    tshc_date = _convert_date(target_date)
+    form_data = {"listDate": tshc_date, "advocate": name}
+    results = []
+
+    for court_source, url in NAME_ENDPOINTS:
+        logger.info(f"Scraping {court_source} by name={name} date={tshc_date}")
+
+        resp = _post_with_retry(url, form_data)
+        if resp is None:
+            logger.error(f"Failed to fetch {court_source} for name={name}")
+            continue
+
+        html = resp.text
+
+        if "No Data Available" in html:
+            logger.info(f"{court_source}: no data for name={name}")
+            continue
+
+        cases = parse_tshc_html(html)
+
+        if cases:
+            results.append(
+                ScrapeResult(
+                    court_source=court_source,
+                    hearing_date=target_date,
+                    total_cases=len(cases),
+                    cases=cases,
+                    raw_html=html,
+                )
+            )
+            logger.info(f"{court_source}: found {len(cases)} cases for name={name}")
 
         time.sleep(1)
 

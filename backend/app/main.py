@@ -13,6 +13,8 @@ from slowapi.util import get_remote_address
 from app.config import settings
 import requests as http_requests
 
+from app.scrapers.district import DISTRICT_COURTS as DC_COURTS
+
 from app.db.supabase_client import (
     create_advocate,
     create_advocate_with_auth,
@@ -195,6 +197,31 @@ def health():
 
 
 # --- Scrape endpoints ---
+
+@app.get("/api/scrape/test-connectivity")
+def test_court_connectivity():
+    """Lightweight check: can this server reach each court website?"""
+    results = {}
+    # TSHC
+    try:
+        r = http_requests.get(
+            "https://causelist.tshc.gov.in/", timeout=15, verify=False
+        )
+        results["tshc"] = {"status": r.status_code, "bytes": len(r.text)}
+    except Exception as e:
+        results["tshc"] = {"error": str(e)}
+
+    # District courts
+    for key, court in DC_COURTS.items():
+        url = f"https://{court['domain']}/cause-list-%E2%81%84-daily-board/"
+        try:
+            r = http_requests.get(url, timeout=15, verify=True)
+            results[key] = {"status": r.status_code, "bytes": len(r.text)}
+        except Exception as e:
+            results[key] = {"error": str(e)}
+
+    return {"connectivity": results}
+
 
 @app.post("/api/scrape/daily")
 def scrape_daily(authorization: str = Header()):

@@ -1,12 +1,9 @@
-/* force-redeploy: 2026-03-25T18:00 */
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 /* ── Court type from Supabase ── */
 interface Court {
@@ -116,7 +113,7 @@ export default function RegisterPage() {
     const barCouncilId = `${barState.trim()}/${barNumber.trim()}/${barYear.trim()}`;
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/register`, {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -483,7 +480,7 @@ export default function RegisterPage() {
                           className="text-xs"
                           style={{ color: isSelected ? "#6b7280" : "#9ca3af" }}
                         >
-                          {court.court_count != null && <>{court.court_count} courts &middot; </>}
+                          {court.court_count != null && <>{court.court_count} &middot; </>}
                           {court.location || "Telangana"}
                         </p>
                       </button>

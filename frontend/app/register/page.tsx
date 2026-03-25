@@ -3,403 +3,535 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const BAR_ID_REGEX = /^[A-Z]{2}\/\d{1,5}\/\d{4}$/;
 
-const COURTS = [
-  { value: "tshc", label: "Telangana High Court (TSHC)" },
-  { value: "rangareddy", label: "Ranga Reddy District Court" },
-  { value: "ccc_hyd", label: "City Civil Court, Hyderabad" },
-  { value: "metro_sessions", label: "Metropolitan Sessions Court" },
-  { value: "medchal", label: "Medchal-Malkajgiri District Court" },
-];
+/* ── Court type from Supabase ── */
+interface Court {
+  id: string;
+  name: string;
+  court_type?: string;
+  location?: string;
+  court_count?: number;
+  icon?: string;
+}
+
+/* ── Icon per court type ── */
+function courtIcon(type?: string) {
+  if (type?.toLowerCase().includes("high")) {
+    return (
+      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+    </svg>
+  );
+}
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-    bar_council_id: "",
-    tshc_computer_code: "",
-    courts_selected: COURTS.map((c) => c.value),
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [step, setStep] = useState(1);
+
+  /* ── Form state ── */
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [password, setPassword] = useState("");
+  const [barState, setBarState] = useState("TS");
+  const [barNumber, setBarNumber] = useState("");
+  const [barYear, setBarYear] = useState("");
+
+  /* ── Courts ── */
+  const [courts, setCourts] = useState<Court[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [courtsLoading, setCourtsLoading] = useState(true);
+
+  /* ── UI state ── */
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [apiError, setApiError] = useState("");
 
-  function toggleCourt(value: string) {
-    setForm((prev) => ({
-      ...prev,
-      courts_selected: prev.courts_selected.includes(value)
-        ? prev.courts_selected.filter((c) => c !== value)
-        : [...prev.courts_selected, value],
-    }));
+  /* ── Fetch courts from Supabase ── */
+  useEffect(() => {
+    async function fetchCourts() {
+      const { data, error } = await supabase
+        .from("courts")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order");
+      if (!error && data) {
+        setCourts(data);
+        setSelected(data.map((c: Court) => c.id));
+      }
+      setCourtsLoading(false);
+    }
+    fetchCourts();
+  }, []);
+
+  /* ── Mobile: strip to digits only, max 10 ── */
+  function handleMobile(val: string) {
+    const digits = val.replace(/\D/g, "").slice(0, 10);
+    setMobile(digits);
   }
 
-  function validate(): boolean {
+  /* ── Validate step 1 ── */
+  function validateStep1(): boolean {
     const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = "Name is required";
-    if (!form.email.trim()) e.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Invalid email address";
-    if (!form.password) e.password = "Password is required";
-    else if (form.password.length < 8) e.password = "Password must be at least 8 characters";
-    if (form.password !== form.confirmPassword)
-      e.confirmPassword = "Passwords do not match";
-    if (!form.bar_council_id.trim()) e.bar_council_id = "Bar Council ID is required";
-    else if (!BAR_ID_REGEX.test(form.bar_council_id))
-      e.bar_council_id = "Format: STATE/NUMBER/YEAR (e.g. TS/315/2017)";
-    if (form.courts_selected.length === 0)
-      e.courts_selected = "Select at least one court";
+    if (!name.trim()) e.name = "Name is required";
+    if (!email.trim()) e.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Invalid email";
+    if (mobile && mobile.length !== 10) e.mobile = "Enter 10-digit mobile number";
+    if (!password) e.password = "Password is required";
+    else if (password.length < 6) e.password = "Minimum 6 characters";
+    if (!barNumber.trim()) e.barNumber = "Number is required";
+    if (!barYear.trim()) e.barYear = "Year is required";
+    else if (!/^\d{4}$/.test(barYear)) e.barYear = "4-digit year";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  async function handleSubmit(ev: React.FormEvent) {
-    ev.preventDefault();
-    if (!validate()) return;
+  /* ── Toggle court selection ── */
+  function toggleCourt(id: string) {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+  }
+
+  /* ── Submit registration ── */
+  async function handleSubmit() {
+    if (selected.length === 0) {
+      setErrors({ courts: "Select at least one court" });
+      return;
+    }
 
     setStatus("loading");
     setApiError("");
+
+    const barCouncilId = `${barState.trim()}/${barNumber.trim()}/${barYear.trim()}`;
 
     try {
       const res = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name.trim(),
-          email: form.email.trim(),
-          password: form.password,
-          phone: form.phone.trim() || null,
-          bar_council_id: form.bar_council_id.trim(),
-          tshc_computer_code: form.tshc_computer_code.trim() || null,
-          courts_selected: form.courts_selected,
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          phone: mobile ? `+91${mobile}` : null,
+          bar_council_id: barCouncilId,
+          courts_selected: selected,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.detail || `Registration failed (${res.status})`);
+        const detail = data?.detail || `Registration failed (${res.status})`;
+        if (res.status === 409) {
+          throw new Error("An account with this email already exists. Please sign in instead.");
+        }
+        throw new Error(detail);
       }
 
       setStatus("success");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Something went wrong";
-      setApiError(msg);
+      setApiError(err instanceof Error ? err.message : "Something went wrong");
       setStatus("error");
     }
   }
 
+  /* ── Auto-redirect on success ── */
   useEffect(() => {
     if (status === "success") {
-      const timer = setTimeout(() => router.push("/login"), 3000);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => router.push("/login"), 3000);
+      return () => clearTimeout(t);
     }
   }, [status, router]);
 
-  /* ─── SUCCESS STATE ─── */
+  /* ═══════════════════════════════════
+     SUCCESS SCREEN
+     ═══════════════════════════════════ */
   if (status === "success") {
     return (
-      <main className="min-h-screen bg-brand-navy flex items-center justify-center px-6">
-        <div className="bg-white rounded-xl p-8 max-w-md w-full text-center shadow-lg">
-          <div className="w-16 h-16 bg-brand-green/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-brand-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <main
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ background: "#f7f8fa", fontFamily: "'DM Sans', sans-serif" }}
+      >
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-[560px] w-full text-center">
+          {/* Green accent bar */}
+          <div className="h-1 rounded-t-2xl -mt-8 -mx-8 mb-8" style={{ background: "#0b6b37" }} />
+
+          <div
+            className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+            style={{ background: "#0b6b3715" }}
+          >
+            <svg className="w-8 h-8" style={{ color: "#0b6b37" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="font-heading text-2xl font-bold text-brand-charcoal mb-2">
-            Account Created Successfully!
+
+          <h1
+            className="text-2xl font-bold mb-2"
+            style={{ fontFamily: "'Playfair Display', serif", color: "#1a1a1a" }}
+          >
+            You&rsquo;re All Set!
           </h1>
-          <p className="text-brand-gray text-sm mb-2">
-            Welcome to CauseListPro. You can now sign in with your email and password.
+          <p className="text-gray-500 text-sm mb-4">
+            Your account has been created. You&rsquo;ll receive daily cause list alerts at your registered email.
           </p>
-          <p className="text-brand-gold text-sm font-medium">
-            Redirecting to login in 3 seconds...
-          </p>
+          <div
+            className="rounded-lg p-3 mb-4 text-sm"
+            style={{ background: "#0b6b3710", color: "#0b6b37" }}
+          >
+            <strong>Important:</strong> Save <span className="font-mono">alerts@avronai.com</span> in your contacts so alerts don&rsquo;t land in spam.
+          </div>
+          <p className="text-gray-400 text-xs">Redirecting to login in 3 seconds...</p>
         </div>
       </main>
     );
   }
 
-  /* ─── FORM ─── */
+  /* ═══════════════════════════════════
+     WIZARD
+     ═══════════════════════════════════ */
   return (
-    <main className="min-h-screen bg-brand-navy">
-      {/* Nav */}
-      <nav className="px-6 py-4 text-center">
-        <Link href="/" className="font-heading text-xl font-bold text-brand-gold tracking-wide">
-          CauseListPro
-        </Link>
-      </nav>
+    <main
+      className="min-h-screen flex flex-col items-center px-4 py-8"
+      style={{ background: "#f7f8fa", fontFamily: "'DM Sans', sans-serif" }}
+    >
+      {/* Logo */}
+      <Link
+        href="/"
+        className="text-xl font-bold tracking-wide mb-6"
+        style={{ fontFamily: "'Playfair Display', serif", color: "#0b6b37" }}
+      >
+        CauseListPro
+      </Link>
 
-      <div className="flex justify-center px-4 pb-16">
-        <div className="bg-white rounded-xl p-6 sm:p-8 w-full max-w-[480px] shadow-lg">
-          <h1 className="font-heading text-2xl font-bold text-brand-charcoal mb-1">
-            Create Your Account
-          </h1>
-          <p className="text-brand-gray text-sm mb-6">
-            Start your 30-day free trial. No credit card required.
-          </p>
+      {/* Card */}
+      <div className="bg-white rounded-2xl shadow-lg w-full max-w-[560px] overflow-hidden">
+        {/* Green accent bar */}
+        <div className="h-1" style={{ background: "#0b6b37" }} />
 
+        <div className="p-6 sm:p-8">
+          {/* Progress dots */}
+          <div className="flex items-center justify-center gap-3 mb-6">
+            {[1, 2].map((s) => (
+              <div key={s} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full transition-colors"
+                  style={{
+                    background: step >= s ? "#0b6b37" : "#d1d5db",
+                  }}
+                />
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: step >= s ? "#0b6b37" : "#9ca3af" }}
+                >
+                  {s === 1 ? "Personal Details" : "Select Courts"}
+                </span>
+                {s === 1 && <div className="w-8 h-px bg-gray-300 mx-1" />}
+              </div>
+            ))}
+          </div>
+
+          {/* Error banner */}
           {status === "error" && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 mb-5 text-sm">
               {apiError}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Full Name */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="As it appears in court records (e.g. AMBALA RAJU)"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition"
-              />
-              <p className="text-brand-gray text-xs mt-1">
-                Use ALL CAPS exactly as your name appears on cause lists
-              </p>
-              {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                Email Address <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="yourname@gmail.com"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition"
-              />
-              {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                Phone Number <span className="text-brand-gray font-normal">(optional)</span>
-              </label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="+91 98765 43210"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                Password <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Minimum 8 characters"
-                  className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-gray hover:text-brand-charcoal transition-colors"
-                  tabIndex={-1}
+          {/* ─── STEP 1 ─── */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <div>
+                <h2
+                  className="text-xl font-bold mb-1"
+                  style={{ fontFamily: "'Playfair Display', serif", color: "#1a1a1a" }}
                 >
-                  {showPassword ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                </button>
+                  Personal Details
+                </h2>
+                <p className="text-gray-500 text-sm">Start your 30-day free trial. No credit card required.</p>
               </div>
-              {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
-            </div>
 
-            {/* Confirm Password */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                Confirm Password <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
+              {/* Full Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
                 <input
-                  type={showConfirm ? "text" : "password"}
-                  value={form.confirmPassword}
-                  onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                  placeholder="Re-enter your password"
-                  className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. APOORVA BANTULA"
+                  className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 transition"
+                  style={{ "--tw-ring-color": "#0b6b3740" } as React.CSSProperties}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-gray hover:text-brand-charcoal transition-colors"
-                  tabIndex={-1}
-                >
-                  {showConfirm ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12c1.292 4.338 5.31 7.5 10.066 7.5.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                </button>
+                {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
               </div>
-              {errors.confirmPassword && (
-                <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>
-              )}
-            </div>
 
-            {/* Bar Council ID */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                Bar Council Enrollment Number <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.bar_council_id}
-                onChange={(e) =>
-                  setForm({ ...form, bar_council_id: e.target.value.toUpperCase() })
-                }
-                placeholder="TS/315/2017"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition"
-              />
-              <p className="text-brand-gray text-xs mt-1">
-                Format: STATE/NUMBER/YEAR (e.g. TS/315/2017)
-              </p>
-              {errors.bar_council_id && (
-                <p className="text-red-500 text-xs mt-1">{errors.bar_council_id}</p>
-              )}
-            </div>
-
-            {/* TSHC Advocate Code */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                TSHC Advocate Code{" "}
-                <span className="text-brand-gray font-normal">(optional)</span>
-              </label>
-              <input
-                type="text"
-                value={form.tshc_computer_code}
-                onChange={(e) =>
-                  setForm({ ...form, tshc_computer_code: e.target.value })
-                }
-                placeholder="5-digit code e.g. 19941"
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition"
-              />
-              <p className="text-brand-gray text-xs mt-1">
-                Your internal TSHC computer code. Leave blank if unknown &mdash; we&rsquo;ll
-                find your cases by name.
-              </p>
-            </div>
-
-            {/* Courts Selection */}
-            <div>
-              <label className="block text-sm font-medium text-brand-charcoal mb-1.5">
-                Courts You Practice In <span className="text-red-500">*</span>
-              </label>
-              <p className="text-brand-gray text-xs mb-3">
-                Select all courts where you appear. We&rsquo;ll only check these courts
-                daily.
-              </p>
-              <div className="space-y-2.5">
-                {COURTS.map((court) => (
-                  <label
-                    key={court.value}
-                    className="flex items-center gap-3 cursor-pointer group"
-                  >
-                    <div
-                      className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                        form.courts_selected.includes(court.value)
-                          ? "bg-brand-gold border-brand-gold"
-                          : "border-gray-300 group-hover:border-brand-gold/50"
-                      }`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggleCourt(court.value);
-                      }}
-                    >
-                      {form.courts_selected.includes(court.value) && (
-                        <svg
-                          className="w-3 h-3 text-white"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={3}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={form.courts_selected.includes(court.value)}
-                      onChange={() => toggleCourt(court.value)}
-                      className="sr-only"
-                    />
-                    <span className="text-sm text-brand-charcoal">{court.label}</span>
+              {/* Email + Mobile side by side */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Email <span className="text-red-500">*</span>
                   </label>
-                ))}
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@email.com"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 transition"
+                    style={{ "--tw-ring-color": "#0b6b3740" } as React.CSSProperties}
+                  />
+                  {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Mobile
+                  </label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 border border-r-0 border-gray-200 rounded-l-lg bg-gray-50 text-gray-500 text-sm">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      value={mobile}
+                      onChange={(e) => handleMobile(e.target.value)}
+                      placeholder="9876543210"
+                      className="flex-1 min-w-0 border border-gray-200 rounded-r-lg px-3 py-3 text-sm focus:outline-none focus:ring-2 transition"
+                      style={{ "--tw-ring-color": "#0b6b3740" } as React.CSSProperties}
+                    />
+                  </div>
+                  {errors.mobile && <p className="text-red-500 text-xs mt-1">{errors.mobile}</p>}
+                </div>
               </div>
-              {errors.courts_selected && (
-                <p className="text-red-500 text-xs mt-2">{errors.courts_selected}</p>
-              )}
-            </div>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={status === "loading"}
-              className="w-full bg-brand-gold text-brand-navy py-3.5 rounded-lg font-bold text-sm hover:bg-brand-gold-light transition-colors disabled:opacity-50"
-            >
-              {status === "loading"
-                ? "Creating your account..."
-                : "Create Account & Start Free Trial"}
-            </button>
-          </form>
+              {/* Create Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Create Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 transition"
+                  style={{ "--tw-ring-color": "#0b6b3740" } as React.CSSProperties}
+                />
+                {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password}</p>}
+              </div>
 
-          <div className="mt-5 text-center space-y-2">
-            <p className="text-brand-gray text-sm">
-              Already have an account?{" "}
-              <Link
-                href="/login"
-                className="text-brand-gold font-semibold hover:underline"
+              {/* Bar Council Enrollment: 3 fields in a row */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Bar Council Enrollment <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={barState}
+                    onChange={(e) => setBarState(e.target.value.toUpperCase().slice(0, 4))}
+                    placeholder="TS"
+                    className="border border-gray-200 rounded-lg px-3 py-3 text-sm text-center font-mono focus:outline-none focus:ring-2 transition"
+                    style={{ width: 72, "--tw-ring-color": "#0b6b3740" } as React.CSSProperties}
+                  />
+                  <input
+                    type="text"
+                    value={barNumber}
+                    onChange={(e) => setBarNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="02775"
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-3 text-sm font-mono focus:outline-none focus:ring-2 transition"
+                    style={{ "--tw-ring-color": "#0b6b3740" } as React.CSSProperties}
+                  />
+                  <input
+                    type="text"
+                    value={barYear}
+                    onChange={(e) => setBarYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="2009"
+                    className="border border-gray-200 rounded-lg px-3 py-3 text-sm text-center font-mono focus:outline-none focus:ring-2 transition"
+                    style={{ width: 84, "--tw-ring-color": "#0b6b3740" } as React.CSSProperties}
+                  />
+                </div>
+                <p className="text-gray-400 text-xs mt-1.5">
+                  State / Number / Year &mdash; e.g. TS / 02775 / 2009
+                </p>
+                {errors.barNumber && <p className="text-red-500 text-xs mt-1">{errors.barNumber}</p>}
+                {errors.barYear && <p className="text-red-500 text-xs mt-1">{errors.barYear}</p>}
+              </div>
+
+              {/* Next button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (validateStep1()) setStep(2);
+                }}
+                className="w-full py-3.5 rounded-lg font-semibold text-sm text-white transition-colors hover:opacity-90"
+                style={{ background: "#0b6b37" }}
               >
-                Sign in
-              </Link>
-            </p>
-            <p className="text-brand-gray text-xs">
-              By registering you agree to our{" "}
-              <Link href="/terms" className="underline hover:text-brand-charcoal">
-                Terms of Service
-              </Link>
-            </p>
-          </div>
+                Next &rarr;
+              </button>
+
+              <p className="text-center text-gray-500 text-sm">
+                Already have an account?{" "}
+                <Link href="/login" className="font-semibold hover:underline" style={{ color: "#0b6b37" }}>
+                  Sign in
+                </Link>
+              </p>
+            </div>
+          )}
+
+          {/* ─── STEP 2 ─── */}
+          {step === 2 && (
+            <div className="space-y-5">
+              <div>
+                <h2
+                  className="text-xl font-bold mb-1"
+                  style={{ fontFamily: "'Playfair Display', serif", color: "#1a1a1a" }}
+                >
+                  Select Your Courts
+                </h2>
+                <p className="text-gray-500 text-sm">
+                  We&rsquo;ll check these courts daily and email your cause list.
+                </p>
+              </div>
+
+              {/* Counter badge */}
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold text-white"
+                  style={{ background: "#0b6b37" }}
+                >
+                  {selected.length} of {courts.length}
+                </span>
+                <span className="text-gray-400 text-xs">courts selected</span>
+              </div>
+
+              {/* Court cards grid */}
+              {courtsLoading ? (
+                <div className="text-center py-8 text-gray-400 text-sm">Loading courts...</div>
+              ) : courts.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">No courts available</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {courts.map((court) => {
+                    const isSelected = selected.includes(court.id);
+                    return (
+                      <button
+                        key={court.id}
+                        type="button"
+                        onClick={() => toggleCourt(court.id)}
+                        className="relative text-left rounded-xl p-4 border-2 transition-all"
+                        style={{
+                          borderColor: isSelected ? "#0b6b37" : "#e5e7eb",
+                          background: isSelected ? "#0b6b3708" : "#fff",
+                        }}
+                      >
+                        {/* Checkmark */}
+                        {isSelected && (
+                          <div
+                            className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
+                            style={{ background: "#0b6b37" }}
+                          >
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+
+                        {/* Icon */}
+                        <div
+                          className="w-9 h-9 rounded-lg flex items-center justify-center mb-2"
+                          style={{
+                            background: isSelected ? "#0b6b3720" : "#f3f4f6",
+                            color: isSelected ? "#0b6b37" : "#9ca3af",
+                          }}
+                        >
+                          {courtIcon(court.court_type)}
+                        </div>
+
+                        {/* Type badge */}
+                        {court.court_type && (
+                          <span
+                            className="inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded mb-1.5"
+                            style={{
+                              background: isSelected ? "#0b6b3715" : "#f3f4f6",
+                              color: isSelected ? "#0b6b37" : "#9ca3af",
+                            }}
+                          >
+                            {court.court_type}
+                          </span>
+                        )}
+
+                        {/* Court name */}
+                        <p
+                          className="text-sm font-semibold leading-tight mb-1"
+                          style={{ color: isSelected ? "#1a1a1a" : "#6b7280" }}
+                        >
+                          {court.name}
+                        </p>
+
+                        {/* Location + count */}
+                        <p
+                          className="text-xs"
+                          style={{ color: isSelected ? "#6b7280" : "#9ca3af" }}
+                        >
+                          {court.court_count != null && <>{court.court_count} courts &middot; </>}
+                          {court.location || "Telangana"}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {errors.courts && (
+                <p className="text-red-500 text-xs">{errors.courts}</p>
+              )}
+
+              <p className="text-gray-400 text-xs text-center">
+                You can change your court selection anytime from your dashboard.
+              </p>
+
+              {/* Back + Submit buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(1);
+                    setStatus("idle");
+                    setApiError("");
+                  }}
+                  className="px-5 py-3.5 rounded-lg font-semibold text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  &larr; Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={status === "loading"}
+                  className="flex-1 py-3.5 rounded-lg font-semibold text-sm text-white transition-colors hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "#0b6b37" }}
+                >
+                  {status === "loading" ? "Creating account..." : "Complete Registration \u2713"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Footer */}
+      <p className="text-gray-400 text-xs mt-6 text-center">
+        By registering you agree to our{" "}
+        <Link href="/terms" className="underline hover:text-gray-600">Terms of Service</Link>
+      </p>
     </main>
   );
 }
